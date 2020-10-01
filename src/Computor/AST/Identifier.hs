@@ -13,3 +13,4 @@ data IdScope = STerm
 
 data Identifier (scope :: IdScope)
   = Identifier Text
+  deriving (Show, Eq)

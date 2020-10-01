@@ -2,6 +2,7 @@ module Computor.Parser
   ( Parser
   , module Text.Megaparsec
   , module Text.Megaparsec.Char
+  , runMyParser
   )
 where
 
@@ -16,3 +17,7 @@ type Parser = Parsec Void Text
 --                   |    \ Token stream
 --                   |
 --                   \ Custom error type
+
+runMyParser :: Parser a -> Text -> Either (ParseErrorBundle Text Void) a
+runMyParser parser =
+  parse parser "<stdio>"

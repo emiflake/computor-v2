@@ -43,4 +43,5 @@ data Expr'
   | Lam (Identifier 'STerm) Expr
 
   -- Application, e.g. _(_)
-  | App (Identifier 'STerm) Expr
+  | App Expr Expr
+  deriving (Show)

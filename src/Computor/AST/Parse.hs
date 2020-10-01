@@ -11,11 +11,15 @@ import Computor.AST.Identifier
 import qualified Computor.AST.Operator as Op
 import Computor.Report
 
+import Data.Foldable (asum)
+
 import Data.Text (Text)
 import qualified Data.Text as Text
 
 import qualified Text.Megaparsec.Char.Lexer as L
 import Control.Monad.Combinators.Expr
+
+-- PRIMITIVE PARSERS
 
 sc :: Parser ()
 sc =
@@ -57,9 +61,13 @@ stringLiteral = char '\"' *> (Text.pack <$> manyTill L.charLiteral (char '\"'))
 float :: Parser Double
 float = lexeme L.float
 
+parens :: Parser a -> Parser a
+parens = between (symbol "(") (symbol ")")
+
+
 operatorTable :: [[Operator Parser Expr]]
 operatorTable =
-  [ [ prefix "%" Negate
+  [ [ prefix "-" Negate
     ]
   , [ binary "*" (BinOp Op.Multiply)
     , binary "/" (BinOp Op.Divide)
@@ -75,3 +83,47 @@ binary name f = InfixL (spanned2 f <$ symbol name)
 
 prefix :: Text -> (Expr -> Expr') -> Operator Parser Expr
 prefix name f = Prefix (spanned1 f <$ symbol name)
+
+-- COMPOUNDS
+
+
+lambda :: Parser Expr
+lambda =
+  spanned $
+    Lam 
+    <$  symbol "\\"
+    <*> termIdentifier
+    <*  symbol "->"
+    <*> expr
+
+application :: Parser Expr
+application =
+  spanned $
+  asum
+  [ App
+    <$> (spanned $ LitIdent <$> termIdentifier)
+    <*  symbol "("
+    <*> expr
+    <*  symbol ")"
+  , App
+    <$  symbol "("
+    <*> expr
+    <*  symbol ")"
+    <*  symbol "("
+    <*> expr
+    <*  symbol ")"
+  ]
+
+term :: Parser Expr
+term =
+  asum
+  [ parens expr
+  , spanned $ LitIdent <$> termIdentifier
+  , spanned $ LitNum <$> float
+  , lambda
+  , application
+  ]
+
+expr :: Parser Expr
+expr =
+  makeExprParser term operatorTable
