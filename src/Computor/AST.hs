@@ -1,8 +1,12 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE LambdaCase #-}
 module Computor.AST
-  ( Stmt(..)
+  ( SStatement(..)
+  , Statement(..)
   , Expr
   , Expr'(..)
+  , SExpr
+  , SExpr'(..)
   )
 where
 
@@ -11,41 +15,124 @@ import Computor.AST.Operator (Operator(..))
 
 import qualified Computor.Report.Tag as Tag
 
-data Stmt
+import Data.List.NonEmpty (NonEmpty)
+import qualified Data.List.NonEmpty as NonEmpty
+
+import Prettyprinter
+
+data SStatement
   -- Assignment to current scope
-  -- e.g. _var = _expr
-  = Assignment (Identifier 'STerm) Expr
+  -- e.g. <name:ident> = <expr>
+  = SAssignment (Identifier 'STerm) SExpr
 
   -- Function definition sugar, desugars to lambda binding
-  -- e.g. _a(_b) = _c
-  -- desugars to _a = \_b -> _c
-  | FunctionDef (Tag.Spanned (Identifier 'STerm))
-                (Tag.Spanned (Identifier 'STerm))
-                Expr
+  -- e.g. <name:ident>(<variables:ident>, ...) = <expr>
+  -- desugars to <name:ident> = \<variables:ident> -> <expr>
+  | SFunctionDefinition
+      (Identifier 'STerm)
+      (NonEmpty (Identifier 'STerm))
+      SExpr
 
   -- Expression query
-  -- _expr = ?
+  -- <expr> = ?
+  | SExprQuery SExpr
+
+data Statement
+  = Assignment (Identifier 'STerm) Expr
   | ExprQuery Expr
 
--- The source AST that is parsed.
+-- The source of AST that is parsesd
+type SExpr = Tag.Spanned SExpr'
+
+data SExpr'
+  -- A literal number, e.g. 42.1337
+  = SLitNum Double
+
+  -- A literal identifier for terms, e.g. fooBar
+  | SLitIdent (Identifier 'STerm)
+
+  -- A binary operator, e.g. _lhs + _rhs
+  | SBinOp Operator SExpr SExpr
+
+  -- Negation operator
+  | SNegate SExpr
+
+  -- A lambda introduction, e.g. \_ -> _
+  | SLam (NonEmpty (Identifier 'STerm)) SExpr
+
+  -- Application, e.g. _(_)
+  | SApp SExpr (NonEmpty SExpr)
+  deriving (Show)
+
+-- DESUGAR
+
+-- Desugared version of SExpr
 type Expr = Tag.Spanned Expr'
 
 data Expr'
-  -- A literal number, e.g. 42.1337
   = LitNum Double
-
-  -- A literal identifier for terms, e.g. fooBar
   | LitIdent (Identifier 'STerm)
-
-  -- A binary operator, e.g. _lhs + _rhs
   | BinOp Operator Expr Expr
-
-  -- Negation operator
   | Negate Expr
-
-  -- A lambda introduction, e.g. \_ -> _
   | Lam (Identifier 'STerm) Expr
-
-  -- Application, e.g. _(_)
   | App Expr Expr
   deriving (Show)
+
+
+-- PRETTY-PRINTING
+
+
+instance Pretty SStatement where
+  pretty = \case
+    SAssignment binding expr ->
+      pretty binding <+> "=" <+> pretty expr
+    SFunctionDefinition binding argument expr ->
+      pretty binding <> "(" <> pretty argument <> ")"
+        <+> "=" <+> pretty expr
+    SExprQuery expr ->
+      pretty expr <+> "=" <+> "?"
+
+instance Pretty Statement where
+  pretty = \case
+    Assignment binding expr ->
+      pretty binding <+> "=" <+> pretty expr
+    ExprQuery expr ->
+      pretty expr <+> "=" <+> "?"
+
+instance Pretty SExpr' where
+  pretty = \case
+    SLitNum n -> pretty n
+    SLitIdent ident -> pretty ident
+    SBinOp operator lhs rhs ->
+      deepOperator lhs <+> pretty operator <+> deepOperator rhs
+    SNegate rhs ->
+      "-" <> pretty rhs
+    SLam binding body ->
+      "\\" <> pretty binding <+> "->" <+> pretty body
+    SApp function value ->
+      deepOperator function <> "(" <> pretty value <> ")"
+    where
+      -- Put parentheses if deeper expression is also a binary operator
+      deepOperator expr =
+        case expr of
+          Tag.At _ (SBinOp _ _ _) -> "(" <> pretty expr <> ")"
+          _ -> pretty expr
+
+instance Pretty Expr' where
+  pretty = \case
+    LitNum n -> pretty n
+    LitIdent ident -> pretty ident
+    BinOp operator lhs rhs ->
+      deepOperator lhs <+> pretty operator <+> deepOperator rhs
+    Negate rhs ->
+      "-" <> pretty rhs
+    Lam binding body ->
+      "\\" <> pretty binding <+> "->" <+> pretty body
+    App function value ->
+      deepOperator function <> "(" <> pretty value <> ")"
+    where
+      -- Put parentheses if deeper expression is also a binary operator
+      deepOperator expr =
+        case expr of
+          Tag.At _ (BinOp _ _ _) -> "(" <> pretty expr <> ")"
+          _ -> pretty expr

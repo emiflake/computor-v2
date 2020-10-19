@@ -4,10 +4,12 @@ import Data.Text (Text)
 import Computor.Parser
 import Computor.AST.Parse
 
+import Prettyprinter
+
 testParse :: Text -> IO ()
 testParse src =
-	case runMyParser expr src of
-		Left e ->
-			putStrLn (errorBundlePretty e)
-		Right v ->
-			print v
+  case runMyParser statement src of
+    Left e ->
+      putStrLn (errorBundlePretty e)
+    Right v ->
+      print (pretty v)

@@ -12,6 +12,11 @@ import qualified Computor.AST.Operator as Op
 import Computor.Report
 
 import Data.Foldable (asum)
+import qualified Data.List.NonEmpty as NonEmpty
+import Data.List.NonEmpty (NonEmpty(..))
+
+import Control.Applicative (Alternative)
+import qualified Control.Applicative as Applicative
 
 import Data.Text (Text)
 import qualified Data.Text as Text
@@ -43,10 +48,10 @@ identifier ::
   -> Parser Char
   -> Parser (Identifier scope)
 identifier first rest =
-  fmap Identifier $
-    Text.cons
+  fmap Identifier $ lexeme 
+    (Text.cons
     <$> first
-    <*> (Text.pack <$> many rest)
+    <*> (Text.pack <$> many rest))
 
 termIdentifier :: Parser (Identifier 'STerm)
 termIdentifier =
@@ -59,71 +64,117 @@ stringLiteral :: Parser Text
 stringLiteral = char '\"' *> (Text.pack <$> manyTill L.charLiteral (char '\"'))
 
 float :: Parser Double
-float = lexeme L.float
+float = try (lexeme L.float) <|> lexeme L.decimal
 
 parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 
-
-operatorTable :: [[Operator Parser Expr]]
+operatorTable :: [[Operator Parser SExpr]]
 operatorTable =
-  [ [ prefix "-" Negate
+  [ [ prefix "-" SNegate
     ]
-  , [ binary "*" (BinOp Op.Multiply)
-    , binary "/" (BinOp Op.Divide)
-    , binary "%" (BinOp Op.Modulus)
+  , [ binary "^" (SBinOp Op.Power)
     ]
-  , [ binary "+" (BinOp Op.Add)
-    , binary "-" (BinOp Op.Subtract)
+  , [ binary "*" (SBinOp Op.Multiply)
+    , binary "/" (SBinOp Op.Divide)
+    , binary "%" (SBinOp Op.Modulus)
     ]
+  , [ binary "+" (SBinOp Op.Add)
+    , binary "-" (SBinOp Op.Subtract)
+    ]
+  , [ binary "." (SBinOp Op.Compose) ]
   ]
 
-binary :: Text -> (Expr -> Expr -> Expr') -> Operator Parser Expr
+binary :: Text -> (SExpr -> SExpr -> SExpr') -> Operator Parser SExpr
 binary name f = InfixL (spanned2 f <$ symbol name)
 
-prefix :: Text -> (Expr -> Expr') -> Operator Parser Expr
+prefix :: Text -> (SExpr -> SExpr') -> Operator Parser SExpr
 prefix name f = Prefix (spanned1 f <$ symbol name)
+
+sepByNonEmpty :: Alternative m => m a -> m sep -> m (NonEmpty a)
+sepByNonEmpty p sep = (:|) <$> p <*> Applicative.many (sep *> p)
+
 
 -- COMPOUNDS
 
 
-lambda :: Parser Expr
+lambda :: Parser SExpr
 lambda =
   spanned $
-    Lam 
+    SLam
     <$  symbol "\\"
-    <*> termIdentifier
+    <*> sepByNonEmpty termIdentifier (symbol ",")
     <*  symbol "->"
     <*> expr
 
-application :: Parser Expr
+application :: Parser SExpr
 application =
   spanned $
   asum
-  [ App
-    <$> (spanned $ LitIdent <$> termIdentifier)
+  [ SApp
+    <$> (spanned $ SLitIdent <$> termIdentifier)
     <*  symbol "("
-    <*> expr
+    <*> sepByNonEmpty expr (symbol ",")
     <*  symbol ")"
-  , App
+  , SApp
     <$  symbol "("
     <*> expr
     <*  symbol ")"
     <*  symbol "("
-    <*> expr
+    <*> sepByNonEmpty expr (symbol ",")
     <*  symbol ")"
   ]
 
-term :: Parser Expr
+term :: Parser SExpr
 term =
   asum
-  [ parens expr
-  , spanned $ LitIdent <$> termIdentifier
-  , spanned $ LitNum <$> float
+  [ try application
+  , parens expr
+  , spanned $ SLitIdent <$> termIdentifier
+  , spanned $ SLitNum <$> float
   , lambda
-  , application
   ]
 
-expr :: Parser Expr
+expr :: Parser SExpr
 expr =
   makeExprParser term operatorTable
+
+
+-- STATEMENTS
+
+
+statement :: Parser SStatement
+statement =
+  -- Why should `try` be used here?
+  -- Unfortunately, all of these statements are kind of mutually consuming a first ident
+  -- See:
+  -- - Assignment consumes with <lhs:ident> = ...
+  -- - Function definion consumes with <lhs:ident>(...) = ...
+  -- - Expr query consumes with <lhs:expr> = ?
+  -- (expr itself can consume identifier by itself, thus it can fail too)
+  asum
+  [ try assignment
+  , try functionDefinition
+  , exprQuery
+  ]
+
+functionDefinition :: Parser SStatement
+functionDefinition =
+  SFunctionDefinition
+  <$> termIdentifier
+  <*  symbol "("
+  <*> sepByNonEmpty termIdentifier (symbol ",")
+  <*  symbol ")"
+  <*  symbol "="
+  <*> expr
+
+assignment :: Parser SStatement
+assignment =
+  SAssignment
+  <$> termIdentifier
+  <*  symbol "="
+  <*> expr
+
+exprQuery :: Parser SStatement
+exprQuery =
+  SExprQuery <$> expr <* symbol "=" <* symbol "?"
