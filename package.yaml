@@ -30,7 +30,6 @@ dependencies:
 - prettyprinter == 1.7.*
 - prettyprinter-ansi-terminal
 - parser-combinators
-- comonad
 
 library:
   source-dirs: src
