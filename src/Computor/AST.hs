@@ -23,6 +23,10 @@ data Stmt
                 (Tag.Spanned (Identifier 'STerm))
                 Expr
 
+  -- Expression query
+  -- _expr = ?
+  | ExprQuery Expr
+
 -- The source AST that is parsed.
 type Expr = Tag.Spanned Expr'
 
