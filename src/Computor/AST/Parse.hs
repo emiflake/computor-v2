@@ -111,18 +111,12 @@ application :: Parser SExpr
 application =
   spanned $
   asum
-  [ SApp
+  [ SApp -- f(x)
     <$> (spanned $ SLitIdent <$> termIdentifier)
-    <*  symbol "("
-    <*> sepByNonEmpty expr (symbol ",")
-    <*  symbol ")"
-  , SApp
-    <$  symbol "("
-    <*> expr
-    <*  symbol ")"
-    <*  symbol "("
-    <*> sepByNonEmpty expr (symbol ",")
-    <*  symbol ")"
+    <*> parens (sepByNonEmpty expr (symbol ","))
+  , SApp -- (... y ...)(x)
+    <$> parens expr
+    <*> parens (sepByNonEmpty expr (symbol ","))
   ]
 
 term :: Parser SExpr
@@ -158,6 +152,20 @@ statement =
   , exprQuery
   ]
 
+-- TODO: FIXME: TODO: FOR REAL: fix indentation parsing
+-- e.g.
+-- SHOULD BE VALID:
+-- ```
+-- foo(bar) =
+--   42 * bar
+-- ```
+-- SHOULD NOT BE VALID:
+-- ```
+-- foo(bar) =
+-- 42 * bar
+-- ```
+-- Look at
+-- https://bit.ly/37nmd5i "indentation-sensitive-parsing.md"
 functionDefinition :: Parser SStatement'
 functionDefinition =
   SFunctionDefinition
