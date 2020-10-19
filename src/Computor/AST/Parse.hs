@@ -152,13 +152,13 @@ statement =
   -- - Function definion consumes with <lhs:ident>(...) = ...
   -- - Expr query consumes with <lhs:expr> = ?
   -- (expr itself can consume identifier by itself, thus it can fail too)
-  asum
+  spanned $ asum
   [ try assignment
   , try functionDefinition
   , exprQuery
   ]
 
-functionDefinition :: Parser SStatement
+functionDefinition :: Parser SStatement'
 functionDefinition =
   SFunctionDefinition
   <$> termIdentifier
@@ -168,13 +168,13 @@ functionDefinition =
   <*  symbol "="
   <*> expr
 
-assignment :: Parser SStatement
+assignment :: Parser SStatement'
 assignment =
   SAssignment
   <$> termIdentifier
   <*  symbol "="
   <*> expr
 
-exprQuery :: Parser SStatement
+exprQuery :: Parser SStatement'
 exprQuery =
   SExprQuery <$> expr <* symbol "=" <* symbol "?"

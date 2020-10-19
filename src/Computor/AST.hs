@@ -1,10 +1,14 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 module Computor.AST
-  ( SStatement(..)
-  , Statement(..)
+  ( SStatement'(..)
+  , SStatement
+  , desugarStatement
+  , Statement'(..)
+  , Statement
   , Expr
   , Expr'(..)
+  , desugarExpr
   , SExpr
   , SExpr'(..)
   )
@@ -15,12 +19,15 @@ import Computor.AST.Operator (Operator(..))
 
 import qualified Computor.Report.Tag as Tag
 
-import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NonEmpty
 
 import Prettyprinter
 
-data SStatement
+
+type SStatement = Tag.Spanned SStatement'
+
+data SStatement'
   -- Assignment to current scope
   -- e.g. <name:ident> = <expr>
   = SAssignment (Identifier 'STerm) SExpr
@@ -37,7 +44,21 @@ data SStatement
   -- <expr> = ?
   | SExprQuery SExpr
 
-data Statement
+desugarStatement :: SStatement -> Statement
+desugarStatement =
+  \case
+    Tag.At s (SAssignment ident expr) ->
+      Tag.At s $ Assignment ident (desugarExpr expr)
+    Tag.At s (SFunctionDefinition name variables expr) ->
+      Tag.At s $ Assignment name
+        (desugarExpr (Tag.At s $ SLam variables expr))
+    Tag.At s (SExprQuery expr) ->
+      Tag.At s $ ExprQuery (desugarExpr expr)
+    
+
+type Statement = Tag.Spanned Statement'
+
+data Statement'
   = Assignment (Identifier 'STerm) Expr
   | ExprQuery Expr
 
@@ -78,11 +99,31 @@ data Expr'
   | App Expr Expr
   deriving (Show)
 
+desugarExpr :: SExpr -> Expr
+desugarExpr =
+  \case
+    Tag.At s (SLitNum n) ->
+      Tag.At s $ LitNum n
+    Tag.At s (SLitIdent ident) ->
+      Tag.At s $ LitIdent ident
+    Tag.At s (SBinOp operator lhs rhs) ->
+      Tag.At s $ BinOp operator (desugarExpr lhs) (desugarExpr rhs)
+    Tag.At s (SNegate expr) ->
+      Tag.At s $ Negate (desugarExpr expr)
+    Tag.At s (SLam arguments expr) ->
+      foldr
+        (\lhs rhs -> Tag.At s (Lam lhs rhs))
+        (desugarExpr expr)
+        (NonEmpty.toList arguments)
+    Tag.At s (SApp fun args) ->
+      foldl1 (\lhs rhs -> Tag.At s (App lhs rhs))
+        (fmap desugarExpr $ fun NonEmpty.<| args)
+
 
 -- PRETTY-PRINTING
 
 
-instance Pretty SStatement where
+instance Pretty SStatement' where
   pretty = \case
     SAssignment binding expr ->
       pretty binding <+> "=" <+> pretty expr
@@ -92,7 +133,7 @@ instance Pretty SStatement where
     SExprQuery expr ->
       pretty expr <+> "=" <+> "?"
 
-instance Pretty Statement where
+instance Pretty Statement' where
   pretty = \case
     Assignment binding expr ->
       pretty binding <+> "=" <+> pretty expr
