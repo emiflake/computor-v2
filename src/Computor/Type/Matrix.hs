@@ -14,6 +14,8 @@ module Computor.Type.Matrix
   , toListsCM
   , indexMatrix
   , filled
+  , fromList
+  , unsafeFromLists
   )
 where
 
@@ -105,6 +107,18 @@ set_ i j _ m@Matrix{..} | i < 0 || i >= rows || j < 0 || j >= columns = m
 set_ i j v m@Matrix{..} =
   m{ elements = elements Vector.// [(i * columns + j, v)] }
 
+fromList :: Int -> Int -> [a] -> Matrix a
+fromList m n =
+  Matrix m n . Vector.fromList
+
+unsafeFromLists :: [[a]] -> Matrix a
+unsafeFromLists xs =
+  let
+    rows = length xs
+    columns = length (head xs)
+  in
+ fromList rows columns (concat xs)
+
 toList :: Matrix a -> [a]
 toList m@Matrix{..} =
   [ unsafeGet i j m
@@ -133,11 +147,11 @@ instance Functor Matrix where
 
 -- PRETTY PRINTING ROUTINE
 
-instance Show a => Pretty (Matrix a) where
+instance Pretty a => Pretty (Matrix a) where
   pretty m@Matrix{..} =
     let
       maximumElementSize =
-        Vector.maximum . fmap (length . show) $ elements
+        Vector.maximum . fmap (length . show . pretty) $ elements
 
       label =
         show rows <> " x " <> show columns
@@ -154,15 +168,14 @@ instance Show a => Pretty (Matrix a) where
       prettyElement v =
         let
           elementLength =
-              length (show v)
+              length (show $ pretty v)
         in
-        viaShow v <> (pretty (replicate (max 0 (maximumElementSize - elementLength)) ' '))
+        pretty v <> (pretty (replicate (max 0 (maximumElementSize - elementLength)) ' '))
     in
-    "┌ " <> pretty label <> " " <> (pretty $ replicate missing '─') <> "┐" <> hardline <>
-    (vsep
-      [ "│" <+> (hsep [ prettyElement (unsafeGet i j m) | j <- [0..columns-1] ]) <>
+    align . vsep $
+    [ "┌ " <> pretty label <> " " <> (pretty $ replicate missing '─') <> "┐" ] <>
+    [ "│" <+> (hsep [ prettyElement (unsafeGet i j m) | j <- [0..columns-1] ]) <>
         pretty (replicate (max 0 $ 0 - (width - labelWidth))' ') <+>
         "│"
-      | i <- [0..rows - 1]
-      ]) <> hardline <>
-    "└" <> (pretty $ replicate (max labelWidth width) '─') <> "┘" <> hardline
+      | i <- [0..rows - 1]] <>
+    [ "└" <> (pretty $ replicate (max labelWidth width) '─') <> "┘" <> softline' ]

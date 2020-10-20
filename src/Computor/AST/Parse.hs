@@ -10,6 +10,8 @@ import Computor.AST
 import Computor.AST.Identifier
 import qualified Computor.AST.Operator as Op
 import Computor.Report
+import qualified Computor.Type.Matrix as Matrix
+import Computor.Type.Matrix (Matrix)
 
 import Data.Foldable (asum)
 import qualified Data.List.NonEmpty as NonEmpty
@@ -40,7 +42,7 @@ symbol :: Text -> Parser Text
 symbol = L.symbol sc
 
 reservedKeywords :: [Text]
-reservedKeywords = []
+reservedKeywords = [ "i" ]
 
 identifier ::
   forall (scope :: IdScope) .
@@ -68,6 +70,18 @@ float = try (lexeme L.float) <|> lexeme L.decimal
 
 parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
+
+squareBrackets :: Parser a -> Parser a
+squareBrackets = between (symbol "[") (symbol "]")
+
+matrix :: Parser a -> Parser (Matrix a)
+matrix p =
+  fmap Matrix.unsafeFromLists $ squareBrackets
+    (sepBy1
+      (squareBrackets
+        (sepBy1 p (symbol ",")))
+      (symbol ";"))
+
 
 operatorTable :: [[Operator Parser SExpr]]
 operatorTable =
@@ -124,6 +138,7 @@ term =
   asum
   [ try application
   , parens expr
+  , spanned $ SLitMatrix <$> matrix expr
   , spanned $ SLitIdent <$> termIdentifier
   , spanned $ SLitNum <$> float
   , lambda

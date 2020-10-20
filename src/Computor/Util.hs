@@ -6,6 +6,7 @@ import Computor.AST.Parse
 import Computor.AST
 
 import Prettyprinter
+import Prettyprinter.Util
 
 testParse :: Text -> IO ()
 testParse src =
@@ -14,6 +15,6 @@ testParse src =
       putStrLn (errorBundlePretty e)
     Right v -> do
       putStrLn "-- Parsed"
-      print (pretty v)
+      putDocW 40 (pretty v <> hardline)
       putStrLn "-- Desugared"
-      print (pretty (desugarStatement v))
+      putDocW 40 (pretty (desugarStatement v) <> hardline)

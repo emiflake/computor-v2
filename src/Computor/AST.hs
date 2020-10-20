@@ -16,6 +16,7 @@ where
 
 import Computor.AST.Identifier (Identifier, IdScope(..))
 import Computor.AST.Operator (Operator(..))
+import Computor.Type.Matrix
 
 import qualified Computor.Report.Tag as Tag
 
@@ -54,7 +55,7 @@ desugarStatement =
         (desugarExpr (Tag.At s $ SLam variables expr))
     Tag.At s (SExprQuery expr) ->
       Tag.At s $ ExprQuery (desugarExpr expr)
-    
+
 
 type Statement = Tag.Spanned Statement'
 
@@ -71,6 +72,9 @@ data SExpr'
 
   -- A literal identifier for terms, e.g. fooBar
   | SLitIdent (Identifier 'STerm)
+
+  -- A literal matrix, containing doubles, e.g. [[1,0];[0,1]]
+  | SLitMatrix (Matrix SExpr)
 
   -- A binary operator, e.g. _lhs + _rhs
   | SBinOp Operator SExpr SExpr
@@ -93,6 +97,7 @@ type Expr = Tag.Spanned Expr'
 data Expr'
   = LitNum Double
   | LitIdent (Identifier 'STerm)
+  | LitMatrix (Matrix SExpr)
   | BinOp Operator Expr Expr
   | Negate Expr
   | Lam (Identifier 'STerm) Expr
@@ -106,6 +111,8 @@ desugarExpr =
       Tag.At s $ LitNum n
     Tag.At s (SLitIdent ident) ->
       Tag.At s $ LitIdent ident
+    Tag.At s (SLitMatrix matrix) ->
+      Tag.At s $ LitMatrix matrix
     Tag.At s (SBinOp operator lhs rhs) ->
       Tag.At s $ BinOp operator (desugarExpr lhs) (desugarExpr rhs)
     Tag.At s (SNegate expr) ->
@@ -144,6 +151,7 @@ instance Pretty SExpr' where
   pretty = \case
     SLitNum n -> pretty n
     SLitIdent ident -> pretty ident
+    SLitMatrix matrix -> pretty matrix
     SBinOp operator lhs rhs ->
       deepOperator lhs <+> pretty operator <+> deepOperator rhs
     SNegate rhs ->
@@ -163,12 +171,13 @@ instance Pretty Expr' where
   pretty = \case
     LitNum n -> pretty n
     LitIdent ident -> pretty ident
+    LitMatrix matrix -> pretty matrix
     BinOp operator lhs rhs ->
-      deepOperator lhs <+> pretty operator <+> deepOperator rhs
+      align $ hsep [ deepOperator lhs <> softline', pretty operator, deepOperator rhs ]
     Negate rhs ->
       "-" <> pretty rhs
     Lam binding body ->
-      "\\" <> pretty binding <+> "->" <+> pretty body
+      "\\" <> pretty binding <+> "->" <> softline <> nest 1 (pretty body)
     App function value ->
       deepOperator function <> "(" <> pretty value <> ")"
     where
