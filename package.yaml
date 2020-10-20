@@ -30,6 +30,7 @@ dependencies:
 - prettyprinter == 1.7.*
 - prettyprinter-ansi-terminal
 - parser-combinators
+- vector
 
 library:
   source-dirs: src
