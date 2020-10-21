@@ -4,10 +4,12 @@ module Computor.AST
   ( SStatement'(..)
   , SStatement
   , desugarStatement
+  , prettyStatement
   , Statement'(..)
   , Statement
   , Expr
   , Expr'(..)
+  , prettyExpr
   , desugarExpr
   , SExpr
   , SExpr'(..)
@@ -18,13 +20,15 @@ import Computor.AST.Identifier (Identifier, IdScope(..))
 import Computor.AST.Operator (Operator(..))
 import Computor.Type.Matrix
 
+import qualified Computor.Pretty as Pretty
+
 import qualified Computor.Report.Tag as Tag
 
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NonEmpty
 
 import Prettyprinter
-
+import Prettyprinter.Render.Terminal
 
 type SStatement = Tag.Spanned SStatement'
 
@@ -44,6 +48,7 @@ data SStatement'
   -- Expression query
   -- <expr> = ?
   | SExprQuery SExpr
+  deriving (Show)
 
 desugarStatement :: SStatement -> Statement
 desugarStatement =
@@ -62,6 +67,7 @@ type Statement = Tag.Spanned Statement'
 data Statement'
   = Assignment (Identifier 'STerm) Expr
   | ExprQuery Expr
+  deriving (Show)
 
 -- The source of AST that is parsesd
 type SExpr = Tag.Spanned SExpr'
@@ -75,6 +81,9 @@ data SExpr'
 
   -- A literal matrix, containing doubles, e.g. [[1,0];[0,1]]
   | SLitMatrix (Matrix SExpr)
+
+  -- Imaginary number literal keyword `i`
+  | SLitImag
 
   -- A binary operator, e.g. _lhs + _rhs
   | SBinOp Operator SExpr SExpr
@@ -97,7 +106,8 @@ type Expr = Tag.Spanned Expr'
 data Expr'
   = LitNum Double
   | LitIdent (Identifier 'STerm)
-  | LitMatrix (Matrix SExpr)
+  | LitMatrix (Matrix Expr)
+  | LitImag
   | BinOp Operator Expr Expr
   | Negate Expr
   | Lam (Identifier 'STerm) Expr
@@ -112,7 +122,9 @@ desugarExpr =
     Tag.At s (SLitIdent ident) ->
       Tag.At s $ LitIdent ident
     Tag.At s (SLitMatrix matrix) ->
-      Tag.At s $ LitMatrix matrix
+      Tag.At s $ LitMatrix (fmap desugarExpr matrix)
+    Tag.At s SLitImag ->
+      Tag.At s LitImag
     Tag.At s (SBinOp operator lhs rhs) ->
       Tag.At s $ BinOp operator (desugarExpr lhs) (desugarExpr rhs)
     Tag.At s (SNegate expr) ->
@@ -140,18 +152,22 @@ instance Pretty SStatement' where
     SExprQuery expr ->
       pretty expr <+> "=" <+> "?"
 
-instance Pretty Statement' where
-  pretty = \case
+prettyStatement :: Statement -> Doc AnsiStyle
+prettyStatement statement = case Tag.sValue statement of
     Assignment binding expr ->
-      pretty binding <+> "=" <+> pretty expr
+      Pretty.identifier (pretty binding) <+> "=" <+> prettyExpr expr
     ExprQuery expr ->
-      pretty expr <+> "=" <+> "?"
+      prettyExpr expr <+> "=" <+> "?"
+
+instance Pretty Statement' where
+  pretty = unAnnotate . prettyStatement . Tag.At mempty
 
 instance Pretty SExpr' where
   pretty = \case
     SLitNum n -> pretty n
     SLitIdent ident -> pretty ident
     SLitMatrix matrix -> pretty matrix
+    SLitImag -> "i"
     SBinOp operator lhs rhs ->
       deepOperator lhs <+> pretty operator <+> deepOperator rhs
     SNegate rhs ->
@@ -167,22 +183,26 @@ instance Pretty SExpr' where
           Tag.At _ (SBinOp _ _ _) -> "(" <> pretty expr <> ")"
           _ -> pretty expr
 
-instance Pretty Expr' where
-  pretty = \case
-    LitNum n -> pretty n
-    LitIdent ident -> pretty ident
-    LitMatrix matrix -> pretty matrix
+prettyExpr :: Expr -> Doc AnsiStyle
+prettyExpr expr = case Tag.sValue expr of
+    LitNum n -> Pretty.number (pretty n)
+    LitIdent ident -> Pretty.identifier (pretty ident)
+    LitMatrix matrix -> prettyMatrix (Just (color Magenta)) prettyExpr matrix
+    LitImag -> Pretty.keyword "i"
     BinOp operator lhs rhs ->
       align $ hsep [ deepOperator lhs <> softline', pretty operator, deepOperator rhs ]
     Negate rhs ->
       "-" <> pretty rhs
     Lam binding body ->
-      "\\" <> pretty binding <+> "->" <> softline <> nest 1 (pretty body)
+      "\\" <> Pretty.identifier (pretty binding) <+> "->" <> softline <> nest 1 (prettyExpr body)
     App function value ->
-      deepOperator function <> "(" <> pretty value <> ")"
+      deepOperator function <> "(" <> prettyExpr value <> ")"
     where
       -- Put parentheses if deeper expression is also a binary operator
       deepOperator expr =
         case expr of
-          Tag.At _ (BinOp _ _ _) -> "(" <> pretty expr <> ")"
-          _ -> pretty expr
+          Tag.At _ (BinOp _ _ _) -> "(" <> prettyExpr expr <> ")"
+          _ -> prettyExpr expr
+
+instance Pretty Expr' where
+  pretty = unAnnotate . prettyExpr . Tag.At mempty

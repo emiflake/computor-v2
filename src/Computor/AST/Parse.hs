@@ -14,6 +14,7 @@ import qualified Computor.Type.Matrix as Matrix
 import Computor.Type.Matrix (Matrix)
 
 import Data.Foldable (asum)
+import Data.Functor
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.List.NonEmpty (NonEmpty(..))
 
@@ -54,6 +55,9 @@ identifier first rest =
     (Text.cons
     <$> first
     <*> (Text.pack <$> many rest))
+
+keyword :: Text -> Parser Text
+keyword match = lexeme (string match <* notFollowedBy alphaNumChar)
 
 termIdentifier :: Parser (Identifier 'STerm)
 termIdentifier =
@@ -137,6 +141,7 @@ term :: Parser SExpr
 term =
   asum
   [ try application
+  , spanned $ SLitImag <$ keyword "i"
   , parens expr
   , spanned $ SLitMatrix <$> matrix expr
   , spanned $ SLitIdent <$> termIdentifier

@@ -16,6 +16,7 @@ module Computor.Type.Matrix
   , filled
   , fromList
   , unsafeFromLists
+  , prettyMatrix
   )
 where
 
@@ -147,11 +148,11 @@ instance Functor Matrix where
 
 -- PRETTY PRINTING ROUTINE
 
-instance Pretty a => Pretty (Matrix a) where
-  pretty m@Matrix{..} =
+prettyMatrix :: Maybe ann -> (a -> Doc ann) -> Matrix a -> Doc ann
+prettyMatrix annLabel prettyElem m@Matrix{..} =
     let
       maximumElementSize =
-        Vector.maximum . fmap (length . show . pretty) $ elements
+        Vector.maximum . fmap (length . show . prettyElem) $ elements
 
       label =
         show rows <> " x " <> show columns
@@ -168,14 +169,18 @@ instance Pretty a => Pretty (Matrix a) where
       prettyElement v =
         let
           elementLength =
-              length (show $ pretty v)
+              length (show $ prettyElem v)
         in
-        pretty v <> (pretty (replicate (max 0 (maximumElementSize - elementLength)) ' '))
+        prettyElem v <> (pretty (replicate (max 0 (maximumElementSize - elementLength)) ' '))
     in
     align . vsep $
-    [ "┌ " <> pretty label <> " " <> (pretty $ replicate missing '─') <> "┐" ] <>
+    [ "┌ " <> ((maybe id annotate annLabel) (pretty label)) <> " " <> (pretty $ replicate missing '─') <> "┐" ] <>
     [ "│" <+> (hsep [ prettyElement (unsafeGet i j m) | j <- [0..columns-1] ]) <>
         pretty (replicate (max 0 $ 0 - (width - labelWidth))' ') <+>
         "│"
       | i <- [0..rows - 1]] <>
     [ "└" <> (pretty $ replicate (max labelWidth width) '─') <> "┘" <> softline' ]
+
+
+instance Pretty a => Pretty (Matrix a) where
+  pretty = prettyMatrix Nothing pretty

@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 module Computor.Parser
   ( Parser
   , module Text.Megaparsec
@@ -21,3 +22,19 @@ type Parser = Parsec Void Text
 runMyParser :: Parser a -> Text -> Either (ParseErrorBundle Text Void) a
 runMyParser parser =
   parse parser "<stdio>"
+
+-- TODO: maybe remove this? Probably not useful.
+-- Instead, we should just shift error messages using Tag.shiftLine
+setLine :: Pos -> Parser ()
+setLine newLinePos =
+  updateParserState
+    (\state@State{..} ->
+       state
+       { statePosState =
+         statePosState
+         { pstateSourcePos =
+             (pstateSourcePos statePosState)
+             { sourceLine = newLinePos
+             }
+         }
+       })

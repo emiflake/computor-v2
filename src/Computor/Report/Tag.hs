@@ -9,6 +9,7 @@ module Computor.Report.Tag
   , spannedBy
   , spanned1
   , spanned2
+  , shiftLine
   ) where
 
 import Prelude hiding (span)
@@ -42,6 +43,12 @@ instance Ord a => Ord (Spanned a) where
 at :: SourcePos -> SourcePos -> a -> Spanned a
 at f t =
   At (Span f t)
+
+shiftLine :: Int -> Span -> Span
+shiftLine offset (Span (SourcePos fileA lineA colA) (SourcePos fileB lineB colB)) =
+  Span
+    (SourcePos fileA (mkPos $ unPos lineA + offset) colA)
+    (SourcePos fileB (mkPos $ unPos lineB + offset) colB)
 
 inLine :: Pos -> SourcePos -> Bool
 inLine l (SourcePos _ l' _) = l == l'
