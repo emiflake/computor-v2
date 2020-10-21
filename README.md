@@ -28,7 +28,7 @@ almostPi = 3.14
 ```
 500 + 300 = ?
 ```
-Shorthand:
+TODO: Shorthand:
 ```
 500 + 300
 ```
@@ -45,7 +45,7 @@ foo = \x -> x * 10
 ```
 Multiple arguments in Lambda
 ```
-addSquares = \x y -> x ^ 2 + y ^ 2
+addSquares = \x, y -> x ^ 2 + y ^ 2
 ```
 
 *Function application*
@@ -53,7 +53,7 @@ addSquares = \x y -> x ^ 2 + y ^ 2
 addSquares(3, 5)
 ```
 
-Maybe in the future: Alternative syntax
+TODO Maybe in the future: Alternative syntax
 ```
 addSquares 3 5
 ```
@@ -66,5 +66,5 @@ identity3x3 = [[1,0,0];[0,1,0];[0,0,1]]
 *Special case `i`*
 
 ```
-myComplex = 2i + 5
+myComplex = 2 * i + 5
 ```
