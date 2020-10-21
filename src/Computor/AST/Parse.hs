@@ -51,7 +51,7 @@ identifier ::
   -> Parser Char
   -> Parser (Identifier scope)
 identifier first rest =
-  fmap Identifier $ lexeme 
+  fmap Identifier $ lexeme
     (Text.cons
     <$> first
     <*> (Text.pack <$> many rest))
@@ -166,11 +166,11 @@ statement =
   -- - Function definion consumes with <lhs:ident>(...) = ...
   -- - Expr query consumes with <lhs:expr> = ?
   -- (expr itself can consume identifier by itself, thus it can fail too)
-  spanned $ asum
-  [ try assignment
-  , try functionDefinition
-  , exprQuery
-  ]
+    sc *> (spanned $ asum
+    [ try assignment
+    , try functionDefinition
+    , exprQuery
+    ]) <* sc
 
 -- TODO: FIXME: TODO: FOR REAL: fix indentation parsing
 -- e.g.

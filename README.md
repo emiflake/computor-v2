@@ -2,6 +2,9 @@
 
 A calculator/programming language
 
+See [this video](https://www.youtube.com/watch?v=8d4RtvMQp10) for more information.
+
+
 ## Building
 
 ### Nix/NixOS
