@@ -8,6 +8,7 @@ module Computor.Type
   , boolTy
   , rationalTy
   , complexTy
+  , ftv
   )
   where
 
@@ -58,7 +59,21 @@ unsafeSolve : (Real -> Number) -> ???
 import qualified Data.Text as Text
 import Data.Text (Text)
 
+import qualified Data.Set as Set
+import Data.Set (Set)
+
 import Prettyprinter
+
+
+ftv :: Type -> Set Text
+ftv ty = case ty of
+  TyCon _ -> Set.empty
+  TyNumber -> Set.empty
+  TyMatrix _ _ t -> ftv t
+  a :-> b -> Set.union (ftv a) (ftv b)
+  TyVar v -> Set.singleton v
+  -- TyApp _ _ -> Set.empty
+  TyForall v t -> Set.delete v (ftv t)
 
 data Type
   -- The number type
@@ -85,6 +100,7 @@ data Type
   -- Parametrized polymorphism, a la Hindley Milner
   -- id : forall a. a -> a
   | TyForall Text Type
+  deriving (Show, Eq)
 
 infixr 9 :->
 
