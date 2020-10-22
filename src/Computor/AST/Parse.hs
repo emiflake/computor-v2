@@ -141,9 +141,9 @@ term :: Parser SExpr
 term =
   asum
   [ try application
-  , spanned $ SLitImag <$ keyword "i"
   , parens expr
   , spanned $ SLitMatrix <$> matrix expr
+  , try $ spanned $ SLitImag <$ keyword "i"
   , spanned $ SLitIdent <$> termIdentifier
   , spanned $ SLitNum <$> float
   , lambda
@@ -205,4 +205,8 @@ assignment =
 
 exprQuery :: Parser SStatement'
 exprQuery =
-  SExprQuery <$> expr <* symbol "=" <* symbol "?"
+  SExprQuery <$> expr <*
+  asum
+  [ symbol "=" <* symbol "?"
+  , symbol "?"
+  ]

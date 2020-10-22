@@ -48,7 +48,7 @@ data SStatement'
   -- Expression query
   -- <expr> = ?
   | SExprQuery SExpr
-  deriving (Show)
+  deriving (Eq, Show)
 
 desugarStatement :: SStatement -> Statement
 desugarStatement =
@@ -67,7 +67,7 @@ type Statement = Tag.Spanned Statement'
 data Statement'
   = Assignment (Identifier 'STerm) Expr
   | ExprQuery Expr
-  deriving (Show)
+  deriving (Eq, Show)
 
 -- The source of AST that is parsesd
 type SExpr = Tag.Spanned SExpr'
@@ -96,7 +96,7 @@ data SExpr'
 
   -- Application, e.g. _(_)
   | SApp SExpr (NonEmpty SExpr)
-  deriving (Show)
+  deriving (Eq, Show)
 
 -- DESUGAR
 
@@ -112,7 +112,7 @@ data Expr'
   | Negate Expr
   | Lam (Identifier 'STerm) Expr
   | App Expr Expr
-  deriving (Show)
+  deriving (Eq, Show)
 
 desugarExpr :: SExpr -> Expr
 desugarExpr =

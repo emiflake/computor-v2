@@ -3,7 +3,9 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RecordWildCards #-}
 module Computor.Type.Checker
-  () where
+  ( infer
+  , runCheckerT
+  ) where
 
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -14,6 +16,15 @@ import qualified Data.Text as Text
 import Data.Text (Text)
 
 import Computor.Type
+import Computor.Type.Matrix (Matrix(..))
+import qualified Computor.Type.Matrix as Matrix
+import Computor.Trans
+import Computor.Error
+import Computor.AST
+import qualified Computor.Report.Tag as Tag
+import Computor.AST.Identifier
+import Computor.AST.Operator
+import qualified Computor.Env as Env
 
 import Control.Monad
 import Control.Monad.IO.Class
@@ -22,14 +33,8 @@ import Control.Monad.State
 import Control.Monad.Writer
 import Control.Monad.Except
 
--- Substitution map
+-- Temporary Substitution map
 type Subst = Map Text Type
-
--- TODO: write proper type errors
-data TypeCheckerError
-  = UnificationError Type Type -- Two types are not unifiable; e.g. Number ~ a
-  | OccursCheck Text Type -- Type variable occurs in non-simple type; e.g. a ~ (a -> a)
-  | MissingVariable Text -- Type variable could not be found in environment
 
 data TypeCheckerState
   = TypeCheckerState
@@ -37,26 +42,36 @@ data TypeCheckerState
   , substMap :: Subst
   }
 
-newtype CheckerM a =
-  CheckerM
-  { runCheckerM' ::
-      ExceptT TypeCheckerError (State TypeCheckerState) a
+  
+newtype CheckerT m a =
+  CheckerT
+  { runCheckerT' :: StateT TypeCheckerState (ComputorT m) a
   }
   deriving
     ( Monad
     , Functor
     , Applicative
-    , MonadError TypeCheckerError
+    , MonadError ComputorError
     , MonadState TypeCheckerState
     )
 
-fresh :: CheckerM Int
+liftComputor :: Monad m => ComputorT m a -> CheckerT m a
+liftComputor = CheckerT . lift 
+
+runCheckerT :: CheckerT m a -> ComputorT m (a, TypeCheckerState)
+runCheckerT =
+  runCheckerT_ (TypeCheckerState 0 Map.empty)
+
+runCheckerT_ :: TypeCheckerState -> CheckerT m a -> ComputorT m (a, TypeCheckerState)
+runCheckerT_ initialState =
+  (`runStateT` initialState) . runCheckerT'
+
+fresh :: Monad m => CheckerT m Int
 fresh =
   state
     (\s@TypeCheckerState{..} -> (freshVariable, s{ freshVariable = freshVariable + 1 }))
 
-freshTyVar ::
-  CheckerM Text
+freshTyVar :: Monad m => CheckerT m Text
 freshTyVar = do
   let easy = (Text.pack . (: [])) <$> ['a' .. 'z']
   n <- fresh
@@ -90,17 +105,14 @@ occurs _ (TyForall _ _) = False -- iffy
 -- occurs v (TyApp _ v') = occurs v v'
 occurs v (a :-> b) = occurs v a || occurs v b
 
-unify ::
-  Type ->
-  Type ->
-  CheckerM Subst
+unify :: Monad m => Type -> Type -> CheckerT m Subst
 unify t1 t2 | t1 == t2 = pure Map.empty
 unify (TyVar v) tv@(TyVar _) = pure (Map.singleton v tv)
 unify (TyVar v) t2
-  | occurs v t2 = throwError $ OccursCheck v t2
+  | occurs v t2 = throwError . TypeError $ OccursCheck v t2
   | otherwise = pure (Map.singleton v t2)
 unify t1 (TyVar v)
-  | occurs v t1 = throwError $ OccursCheck v t1
+  | occurs v t1 = throwError . TypeError $ OccursCheck v t1
   | otherwise = pure (Map.singleton v t1)
 unify (a :-> b) (c :-> d) = do
   s1 <- unify a c
@@ -110,11 +122,18 @@ unify (a :-> b) (c :-> d) = do
 --   s1 <- unify s s'
 --   s2 <- unify (applyS s1 v) (applyS s1 v')
 --   pure $ s1 `composeS` s2
-unify t1 t2 = throwError $ UnificationError t1 t2
+unify t1 t2
+  | TyNumber `elem` [t1, t2] && (t1 `elem` degradesToNumber || t2 `elem` degradesToNumber)
+  = pure Map.empty
+unify t1 t2 = throwError . TypeError $ UnificationError t1 t2
 
-instantiate ::
-  Type ->
-  CheckerM Type
+degradesToNumber :: [Type]
+degradesToNumber =
+  [ realTy
+  , complexTy
+  , rationalTy
+  ]
+instantiate :: Monad m => Type -> CheckerT m Type
 instantiate (TyForall n ty) = do
   freshTy <- freshTyVar
   applyS (Map.singleton n (TyVar freshTy)) <$> instantiate ty
@@ -129,130 +148,105 @@ instantiate (TyVar tv) = pure (TyVar tv)
 generalize :: Type -> Type
 generalize ty = foldr TyForall ty (ftv ty)
 
--- runCheck m = runM . runError . runFresh $ m
+{- This function is responsible for ensuring your ascription is strictly unifiable in one direction, namely, you are able to restrict types, but not extend them.
+   This function needs verification.
+-}
 
--- inferIO :: Map String Type -> A.Expr -> IO (Either TypeError (Subst, Type))
--- inferIO = fmap runCheck . infer
+ascCheck :: Monad m => Map Text Type -> Expr -> Type -> CheckerT m Type
+ascCheck env expr t = do
+  (s, t') <- infer' env expr
+  ss <- unify t' t
+  let ut = applyS (s `composeS` ss) t
+  if ut == t
+    then pure t
+    else throwError . TypeError $ UnificationError t t'
 
--- checkIO :: A.Module -> IO (Either TypeError (Map String Type))
--- checkIO = runCheck . checkModule
+infer :: Monad m => Expr -> CheckerT m (Subst, Type)
+infer expr = do
+  env <- liftComputor (Map.map fst . Env.getEnvironment <$> get)
+  (s, ty) <- infer' env expr 
+  pure (s, generalize ty)
 
--- unifyIO :: Type -> Type -> IO (Either TypeError Subst)
--- unifyIO a b = runCheck $ unify a b
+infer' :: Monad m => Map Text Type -> Expr -> CheckerT m (Subst, Type)
+infer' env expr = case expr of
+  Tag.At s (LitIdent ident) ->
+    case Map.lookup (unIdentifier ident) env of
+      Nothing -> throwError . TypeError $ MissingVariable (unIdentifier ident)
+      Just ty -> pure (Map.empty, ty)
 
--- standardEnv :: Map String Type
--- standardEnv =
---   Map.fromList
---     [ ( "eval",
---         TyForall "a" (Type.stringTy :~> TyVar "a")
---       )
---     ]
+  Tag.At _ (LitNum _) ->
+    pure (Map.empty, realTy)
 
--- checkModule ::
---   ( Member Fresh sig,
---     Member (Error TypeError) sig,
---     Carrier sig m
---   ) =>
---   A.Module ->
---   m (Map String Type)
--- checkModule (A.Module _ bindings) = go standardEnv bindings
---   where
---     go env (A.TermDefinition name expr : bindings') = do
---       tvar <- freshTyVar
---       (_, rt) <- infer (Map.insert name (TyVar tvar) env) expr
---       rss <- unify (TyVar tvar) rt
---       let ft = generalizeIfValue expr $ applyS rss (TyVar tvar)
---       go (Map.insert name ft env) bindings'
---     go env [] = pure env
+  Tag.At _ LitImag ->
+    pure (Map.empty, complexTy)
 
--- {- This function is responsible for ensuring your ascription is strictly unifiable in one direction, namely, you are able to restrict types, but not extend them.
---    This function needs verification.
--- -}
--- ascCheck ::
---   ( Member Fresh sig,
---     Member (Error TypeError) sig,
---     Carrier sig m
---   ) =>
---   Map String Type ->
---   A.Expr ->
---   Type ->
---   m Type
--- ascCheck env expr t = do
---   (s, t') <- infer env expr
---   ss <- unify t' t
---   let ut = applyS (s `composeS` ss) t
---   if ut == t
---     then pure t
---     else throwError $ UnificationError t t'
+  Tag.At _ (LitMatrix matrix@Matrix{..}) -> do
+    freshTy <- freshTyVar
+    subsL <- forM (Matrix.toList matrix) $ \elem -> do
+      (s, ct) <- infer' env elem
+      ss <- unify ct (TyVar freshTy)
+      pure (s <> ss)
+    let subs = flattenS subsL
+    let t = generalize (applyS subs (TyVar freshTy))
+    pure (subs, TyMatrix rows columns t)
 
--- infer ::
---   ( Member Fresh sig,
---     Member (Error TypeError) sig,
---     Carrier sig m
---   ) =>
---   Map String Type ->
---   A.Expr ->
---   m (Subst, Type)
--- infer env expr = case expr of
---   A.Var v -> case Map.lookup v env of
---     Nothing -> throwError $ MissingVariable v
---     Just ty -> pure (Map.empty, ty)
---   A.NumLit _ -> pure (Map.empty, Type.numTy)
---   A.StringLit _ -> pure (Map.empty, Type.stringTy)
---   A.Asc e t -> do
---     rt <- ascCheck env e t
---     pure (Map.empty, rt)
---   A.If c t f -> do
---     (cs, ct) <- infer env c
---     (ts, tt) <- infer env t
---     (fs, ft) <- infer env f
---     tvar <- freshTyVar
---     bs <- unify ct Type.boolTy
---     ct' <- instantiate $ applyS bs ct
---     tt' <- instantiate $ applyS (cs `composeS` bs) tt
---     ft' <- instantiate $ applyS (foldr composeS Map.empty [ts, cs, bs]) ft
---     ss <- unify (Type.boolTy :~> TyVar tvar :~> TyVar tvar) (ct' :~> tt' :~> ft')
---     let sss = flattenS [ss, fs, ts, cs, bs]
---     pure (sss, applyS sss (TyVar tvar))
---   A.BinOp op l r -> do
---     opTy <- inferOp op
---     (ls, lt) <- infer env l
---     (rs, rt) <- infer env r
---     tvar <- freshTyVar
---     lt' <- instantiate lt
---     rt' <- instantiate rt
---     ss <- unify (lt' :~> applyS ls rt' :~> TyVar tvar) opTy
---     let sss = flattenS [ss, rs, ls]
---     pure (sss, applyS sss (TyVar tvar))
---   A.App fun arg -> do
---     tvar <- freshTyVar
---     (fs, ft) <- infer env fun
---     (as, at) <- infer env arg
---     ft' <- instantiate ft
---     at' <- instantiate (applyS fs at)
---     ss <- unify (at' :~> TyVar tvar) ft'
---     let sss = flattenS [fs, as, ss]
---     pure (sss, applyS sss (TyVar tvar))
---   A.Lam param body -> do
---     tvar <- freshTyVar
---     (bs, bt) <- infer (Map.insert param (TyVar tvar) env) body
---     bt' <- instantiate bt
---     pure (bs, applyS bs (TyVar tvar) :~> bt')
---   A.Let name rhs body -> do
---     tvar <- freshTyVar
---     (rs, rt) <- infer (Map.insert name (TyVar tvar) env) rhs
---     rss <- unify (TyVar tvar) rt
---     let rt' = generalizeIfValue rhs (applyS rss (TyVar tvar))
---     (bs, bt) <- infer (Map.insert name rt' env) body
---     pure (bs `composeS` rs, applyS rs bt)
---   where
---     inferOp Plus = pure (Type.numTy :~> Type.numTy :~> Type.numTy)
---     inferOp Minus = pure (Type.numTy :~> Type.numTy :~> Type.numTy)
---     inferOp Multiply = pure (Type.numTy :~> Type.numTy :~> Type.numTy)
---     inferOp _ = do
---       -- This may be really bad
---       freshTy <- freshTyVar
---       pure (TyVar freshTy :~> TyVar freshTy :~> TyVar freshTy)
+  -- A.StringLit _ -> pure (Map.empty, Type.stringTy)
+  -- A.Asc e t -> do
+  --   rt <- ascCheck env e t
+  --   pure (Map.empty, rt)
+  -- A.If c t f -> do
+  --   (cs, ct) <- infer env c
+  --   (ts, tt) <- infer env t
+  --   (fs, ft) <- infer env f
+  --   tvar <- freshTyVar
+  --   bs <- unify ct Type.boolTy
+  --   ct' <- instantiate $ applyS bs ct
+  --   tt' <- instantiate $ applyS (cs `composeS` bs) tt
+  --   ft' <- instantiate $ applyS (foldr composeS Map.empty [ts, cs, bs]) ft
+  --   ss <- unify (Type.boolTy :~> TyVar tvar :~> TyVar tvar) (ct' :~> tt' :~> ft')
+  --   let sss = flattenS [ss, fs, ts, cs, bs]
+  --   pure (sss, applyS sss (TyVar tvar))
+  Tag.At _ (BinOp op l r) -> do
+    opTy <- inferOp op
+    (ls, lt) <- infer' env l
+    (rs, rt) <- infer' env r
+    tvar <- freshTyVar
+    lt' <- instantiate lt
+    rt' <- instantiate rt
+    ss <- unify (lt' :-> applyS ls rt' :-> TyVar tvar) opTy
+    let sss = flattenS [ss, rs, ls]
+    pure (sss, applyS sss (TyVar tvar))
+  Tag.At _ (App fun arg) -> do
+    tvar <- freshTyVar
+    (fs, ft) <- infer' env fun
+    (as, at) <- infer' env arg
+    ft' <- instantiate ft
+    at' <- instantiate (applyS fs at)
+    ss <- unify (at' :-> TyVar tvar) ft'
+    let sss = flattenS [fs, as, ss]
+    pure (sss, applyS sss (TyVar tvar))
+  Tag.At _ (Lam param body) -> do
+    tvar <- freshTyVar
+    (bs, bt) <- infer' (Map.insert (unIdentifier param) (TyVar tvar) env) body
+    bt' <- instantiate bt
+    pure (bs, applyS bs (TyVar tvar) :-> bt')
+  -- A.Let name rhs body -> do
+  --   tvar <- freshTyVar
+  --   (rs, rt) <- infer (Map.insert name (TyVar tvar) env) rhs
+  --   rss <- unify (TyVar tvar) rt
+  --   let rt' = generalizeIfValue rhs (applyS rss (TyVar tvar))
+  --   (bs, bt) <- infer (Map.insert name rt' env) body
+  --   pure (bs `composeS` rs, applyS rs bt)
+  where
+    inferOp Add = pure (TyNumber :-> TyNumber :-> TyNumber)
+    inferOp Subtract = pure (TyNumber :-> TyNumber :-> TyNumber)
+    inferOp Multiply = pure (TyNumber :-> TyNumber :-> TyNumber)
+    inferOp Divide = pure (TyNumber :-> TyNumber :-> TyNumber)
+    inferOp Modulus = pure (TyNumber :-> TyNumber :-> TyNumber)
+    inferOp Power = pure (TyNumber :-> TyNumber :-> TyNumber)
+    inferOp Compose = do
+      freshTy <- freshTyVar
+      pure (TyVar freshTy :-> TyVar freshTy :-> TyVar freshTy)
 
 -- generalizeIfValue :: A.Expr -> Type -> Type
 -- generalizeIfValue e ty

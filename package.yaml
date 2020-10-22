@@ -26,11 +26,13 @@ dependencies:
 - transformers
 - text
 - optparse-applicative
-- haskeline
+- exceptions
+- haskeline == 0.8.1.0
 - prettyprinter == 1.7.*
 - prettyprinter-ansi-terminal
 - parser-combinators
 - vector
+- ghc-prim
 
 library:
   source-dirs: src

@@ -16,7 +16,7 @@ data IdScope = STerm
   deriving (Show, Eq)
 
 data Identifier (scope :: IdScope)
-  = Identifier Text
+  = Identifier { unIdentifier :: Text }
   deriving (Show, Eq)
 
 instance Pretty (Identifier scope) where

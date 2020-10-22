@@ -26,8 +26,8 @@ identifier :: Doc AnsiStyle -> Doc AnsiStyle
 identifier =
   annotate (color Yellow)
 
-terminalLine :: Int -> Doc AnsiStyle
-terminalLine lineNumber =
+terminalLine :: Doc AnsiStyle
+terminalLine =
   keyword ("Computor V2") <+> "λ> "
 
 renderToString :: Doc AnsiStyle -> String

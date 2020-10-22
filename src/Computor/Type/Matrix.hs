@@ -123,8 +123,8 @@ unsafeFromLists xs =
 toList :: Matrix a -> [a]
 toList m@Matrix{..} =
   [ unsafeGet i j m
-  | i <- [0..columns - 1]
-  , j <- [0..rows - 1]
+  | i <- [0..rows - 1]
+  , j <- [0..columns - 1]
   ]
 
 toListsRM :: Matrix a -> [[a]]

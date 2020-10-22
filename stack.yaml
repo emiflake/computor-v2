@@ -41,6 +41,7 @@ packages:
 #
 extra-deps:
 - prettyprinter-1.7.0@sha256:6a9569e21fa61163a7f066d23d701e23e917893e8f39733d6e617ec72787ae5f,6007
+- haskeline-0.8.1.0@sha256:6a6158c90b929ce7aa5331ff5e9819aa32c7df8f4a7ba324b3cc055ee96b48cb,5818
 
 # Override default flag values for local packages and extra-deps
 # flags: {}

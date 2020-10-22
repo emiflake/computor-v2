@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 2202a137089bff0d924504c6d5b1e8518f0383b3a777e911147ea30187961eb9
+-- hash: efa9f4af7e924cacc358b2cae19035c30cf3c18c1eb0fa816c72e2aebf756149
 
 name:           computor-v2
 version:        0.1.0.0
@@ -30,12 +30,16 @@ library
       Computor.AST.Identifier
       Computor.AST.Operator
       Computor.AST.Parse
+      Computor.Env
+      Computor.Error
       Computor.Parser
       Computor.Pretty
       Computor.REPL
       Computor.Report
       Computor.Report.SourceCode
       Computor.Report.Tag
+      Computor.Term
+      Computor.Trans
       Computor.Type
       Computor.Type.Checker
       Computor.Type.Matrix
@@ -50,7 +54,9 @@ library
   build-depends:
       base >=4.7 && <5
     , containers
-    , haskeline
+    , exceptions
+    , ghc-prim
+    , haskeline ==0.8.1.0
     , megaparsec
     , mtl
     , optparse-applicative
@@ -74,7 +80,9 @@ executable computor-v2-exe
       base >=4.7 && <5
     , computor-v2
     , containers
-    , haskeline
+    , exceptions
+    , ghc-prim
+    , haskeline ==0.8.1.0
     , megaparsec
     , mtl
     , optparse-applicative
@@ -99,7 +107,9 @@ test-suite computor-v2-test
       base >=4.7 && <5
     , computor-v2
     , containers
-    , haskeline
+    , exceptions
+    , ghc-prim
+    , haskeline ==0.8.1.0
     , megaparsec
     , mtl
     , optparse-applicative

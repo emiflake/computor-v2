@@ -63,6 +63,7 @@ import qualified Data.Set as Set
 import Data.Set (Set)
 
 import Prettyprinter
+import Prettyprinter.Render.Terminal
 
 
 ftv :: Type -> Set Text
@@ -123,15 +124,18 @@ unitTy :: Type
 unitTy = TyCon "Unit"
 
 instance Pretty Type where
-  pretty = \case
-    TyNumber -> "Number"
-    TyVar name -> pretty name
-    TyCon name -> pretty name
-    from :-> to -> deepTy from <+> "->" <+> pretty to
-    TyMatrix m n ty -> "Matrix" <+> pretty m <+> pretty n <+> deepTy ty
-    TyForall binding ty -> "∀" <+> pretty binding <> "." <+> deepTy ty
-    where
-      deepTy ty =
-        case ty of
-          _ :-> _ -> "(" <> pretty ty <> ")"
-          _ -> pretty ty
+  pretty = unAnnotate . prettyType
+
+prettyType :: Type -> Doc AnsiStyle
+prettyType = \case
+  TyNumber -> "Number"
+  TyVar name -> pretty name
+  TyCon name -> pretty name
+  from :-> to -> deepTy from <+> "->" <+> pretty to
+  TyMatrix m n ty -> "Matrix" <+> pretty m <+> pretty n <+> deepTy ty
+  TyForall binding ty -> "∀" <+> pretty binding <> "." <+> deepTy ty
+  where
+    deepTy ty =
+      case ty of
+        _ :-> _ -> "(" <> pretty ty <> ")"
+        _ -> pretty ty
