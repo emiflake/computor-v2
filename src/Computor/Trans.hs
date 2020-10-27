@@ -9,6 +9,7 @@ module Computor.Trans
   , envLookup
   , envLookupType
   , envLookupTerm
+  , envStore
   )
   where
 
@@ -70,3 +71,6 @@ envLookupType key = Env.lookupType key <$> get
 
 envLookupTerm :: Monad m => Text -> ComputorT m (Maybe Term)
 envLookupTerm key = Env.lookupTerm key <$> get
+
+envStore :: Monad m => Text -> (Type, Term) -> ComputorT m ()
+envStore key value = modify (Env.store key value)

@@ -2,6 +2,7 @@ module Computor.Pretty
   ( keyword
   , number
   , identifier
+  , arrow
   , terminalLine
   , renderToString
   )
@@ -25,6 +26,10 @@ number =
 identifier :: Doc AnsiStyle -> Doc AnsiStyle
 identifier =
   annotate (color Yellow)
+
+arrow :: Doc AnsiStyle -> Doc AnsiStyle
+arrow =
+  annotate (color White)
 
 terminalLine :: Doc AnsiStyle
 terminalLine =

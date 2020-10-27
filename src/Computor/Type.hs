@@ -1,7 +1,8 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Computor.Type
-  ( Type(..)
+  ( Type'(..)
+  , Type
   , realTy
   , stringTy
   , unitTy
@@ -9,6 +10,7 @@ module Computor.Type
   , rationalTy
   , complexTy
   , ftv
+  , prettyType
   )
   where
 
@@ -52,8 +54,6 @@ These are important to be defined, because otherwise, we will lose all informati
 
 Example hard to define function without having too much insight into the future:
 
-unsafeSolve : (Real -> Number) -> ???
-
 -}
 
 import qualified Data.Text as Text
@@ -65,9 +65,12 @@ import Data.Set (Set)
 import Prettyprinter
 import Prettyprinter.Render.Terminal
 
+import qualified Computor.Pretty as Pretty
+import qualified Computor.Report.Tag as Tag
+
 
 ftv :: Type -> Set Text
-ftv ty = case ty of
+ftv ty = case Tag.sValue ty of
   TyCon _ -> Set.empty
   TyNumber -> Set.empty
   TyMatrix _ _ t -> ftv t
@@ -76,7 +79,9 @@ ftv ty = case ty of
   -- TyApp _ _ -> Set.empty
   TyForall v t -> Set.delete v (ftv t)
 
-data Type
+type Type = Tag.Spanned Type'
+
+data Type'
   -- The number type
   -- A humongous dynamic type that does everything you'd ever want, but is unsafe cuz fuck me is it hard to make it safe
   = TyNumber
@@ -105,37 +110,38 @@ data Type
 
 infixr 9 :->
 
-stringTy :: Type
+stringTy :: Type'
 stringTy = TyCon "String"
 
-realTy :: Type
+realTy :: Type'
 realTy = TyCon "Real"
 
-rationalTy :: Type
+rationalTy :: Type'
 rationalTy = TyCon "Rational"
 
-complexTy :: Type
+complexTy :: Type'
 complexTy = TyCon "Complex"
 
-boolTy :: Type
+boolTy :: Type'
 boolTy = TyCon "Bool"
 
-unitTy :: Type
+unitTy :: Type'
 unitTy = TyCon "Unit"
 
-instance Pretty Type where
-  pretty = unAnnotate . prettyType
+instance Pretty Type' where
+  pretty = unAnnotate . prettyType . Tag.At mempty
 
 prettyType :: Type -> Doc AnsiStyle
-prettyType = \case
-  TyNumber -> "Number"
-  TyVar name -> pretty name
-  TyCon name -> pretty name
-  from :-> to -> deepTy from <+> "->" <+> pretty to
-  TyMatrix m n ty -> "Matrix" <+> pretty m <+> pretty n <+> deepTy ty
-  TyForall binding ty -> "∀" <+> pretty binding <> "." <+> deepTy ty
+prettyType ty = case Tag.sValue ty of
+  TyNumber -> Pretty.keyword "Number"
+  TyVar name -> Pretty.identifier (pretty name)
+  TyCon name -> Pretty.identifier (pretty name)
+  from :-> to -> deepTy from <+> Pretty.arrow "->" <+> prettyType to
+  TyMatrix m n ty -> Pretty.keyword "Matrix" <+> pretty m <+> pretty n <+> deepTy ty
+  TyForall binding ty -> Pretty.keyword "∀" <+> Pretty.identifier (pretty binding) <> "." <+> deepTy ty
   where
+    deepTy :: Type -> Doc AnsiStyle
     deepTy ty =
-      case ty of
-        _ :-> _ -> "(" <> pretty ty <> ")"
-        _ -> pretty ty
+      case Tag.sValue ty of
+        _ :-> _ -> "(" <> prettyType ty <> ")"
+        _ -> prettyType ty

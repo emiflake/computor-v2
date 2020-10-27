@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TypeApplications #-}
 module Computor.REPL
   ( runRepl
   )
@@ -10,6 +11,7 @@ import System.Console.Haskeline
 
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
+import Control.Monad.State
 
 import Data.Void
 import Control.Monad
@@ -24,8 +26,12 @@ import Prettyprinter.Render.Terminal
 import Computor.Parser
 import Computor.Trans
 import Computor.Env
+import Computor.Term
+import Computor.Type
+import Computor.Error
 import Computor.Type.Checker
 import Computor.AST.Parse
+import Computor.AST.Identifier
 import Computor.AST
 import Computor.Report.SourceCode
 import qualified Computor.Report.Tag as Tag
@@ -39,7 +45,7 @@ type REPL = ComputorT (InputT IO)
 
 showEnvironment :: REPL ()
 showEnvironment =
-  liftIO $ putStrLn "Environment not implemented yet, even"
+  liftIO . print =<< get @Environment
 
 handleLine :: Text -> REPL ()
 handleLine line = do
@@ -51,9 +57,15 @@ handleLine line = do
     Tag.At _ (ExprQuery expr) -> do
         ((subst, ty), s) <- runCheckerT (infer expr)
         liftIO . putDoc $
-          "Has type:" <+> pretty ty <> hardline
-    _ -> liftIO $ putStrLn "This type of statement is TODO"
-  
+          "Has type:" <+> prettyType ty <> hardline
+    Tag.At _ (Assignment binding expr) -> do
+        ((_, ty), s) <- runCheckerT (infer expr)
+
+        envStore (unIdentifier binding) (ty, TermReal 42) -- TODO?
+
+        liftIO . putDoc $
+          "Has type:" <+> prettyType ty <> hardline
+
   pure ()
 
 parseStatement :: Text -> REPL Statement
@@ -78,7 +90,7 @@ runRepl =
             `catchError`
               \case
                  SyntaxError sError -> liftIO . putStrLn $ errorBundlePretty sError
-                 TypeError e -> liftIO $ print e
+                 TypeError e -> liftIO . putDoc . prettyTypeCheckerError (Text.pack input) $ e
                  RuntimeError -> liftIO $ putStrLn "Some runtime error happened"
           loop
   in
