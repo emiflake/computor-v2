@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: efa9f4af7e924cacc358b2cae19035c30cf3c18c1eb0fa816c72e2aebf756149
+-- hash: 765bb6e4e79dc2ddbc11c7c645708a289e3cae5fb3b443843121972d056a54cf
 
 name:           computor-v2
 version:        0.1.0.0
@@ -44,6 +44,7 @@ library
       Computor.Type.Checker
       Computor.Type.Matrix
       Computor.Type.Rational
+      Computor.Type.VarId
       Computor.Util
       Lib
   other-modules:

@@ -28,9 +28,10 @@ almostPi = 3.14
 ```
 500 + 300 = ?
 ```
-TODO: Shorthand:
+
+Shorthand:
 ```
-500 + 300
+500 + 300?
 ```
 
 *Function definition*
@@ -51,11 +52,6 @@ addSquares = \x, y -> x ^ 2 + y ^ 2
 *Function application*
 ```
 addSquares(3, 5)
-```
-
-TODO Maybe in the future: Alternative syntax
-```
-addSquares 3 5
 ```
 
 *Matrices*

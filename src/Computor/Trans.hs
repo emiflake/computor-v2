@@ -32,8 +32,6 @@ import Control.Monad.Trans.Class
 import qualified Data.Text as Text
 import Data.Text (Text)
 
-
-
 newtype ComputorT m a =
   ComputorT
   { runComputorT' ::

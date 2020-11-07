@@ -199,10 +199,10 @@ prettyExpr expr = case Tag.sValue expr of
       deepOperator function <> "(" <> prettyExpr value <> ")"
     where
       -- Put parentheses if deeper expression is also a binary operator
-      deepOperator expr =
-        case expr of
-          Tag.At _ (BinOp _ _ _) -> "(" <> prettyExpr expr <> ")"
-          _ -> prettyExpr expr
+      deepOperator expr' =
+        case expr' of
+          Tag.At _ (BinOp _ _ _) -> "(" <> prettyExpr expr' <> ")"
+          _ -> prettyExpr expr'
 
 instance Pretty Expr' where
   pretty = unAnnotate . prettyExpr . Tag.At mempty

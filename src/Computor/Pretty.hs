@@ -13,8 +13,6 @@ import Prettyprinter.Render.Terminal
 
 import qualified Data.Text as Text
 
--- TODO: maybe use this sometime in the future, if I want a bonus?
-
 keyword :: Doc AnsiStyle -> Doc AnsiStyle
 keyword =
   annotate bold . annotate (color Magenta)
