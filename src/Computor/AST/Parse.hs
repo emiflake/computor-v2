@@ -46,10 +46,9 @@ reservedKeywords :: [Text]
 reservedKeywords = [ "i" ]
 
 identifier ::
-  forall (scope :: IdScope) .
      Parser Char
   -> Parser Char
-  -> Parser (Identifier scope)
+  -> Parser Identifier
 identifier first rest =
   fmap Identifier $ lexeme
     (Text.cons
@@ -59,7 +58,7 @@ identifier first rest =
 keyword :: Text -> Parser Text
 keyword match = lexeme (string match <* notFollowedBy alphaNumChar)
 
-termIdentifier :: Parser (Identifier 'STerm)
+termIdentifier :: Parser Identifier
 termIdentifier =
   identifier lowerChar alphaNumChar
 

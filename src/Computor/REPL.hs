@@ -58,10 +58,16 @@ handleLine line = do
         ((subst, ty), s) <- runCheckerT (infer expr)
         liftIO . putDoc $
           "Has type:" <+> prettyType ty <> hardline
+
+        let t = fromExpr expr
+
+        liftIO . putDoc $
+          "Has value:" <+> prettyTerm t <> hardline
+
     Tag.At _ (Assignment binding expr) -> do
         ((_, ty), s) <- runCheckerT (infer expr)
 
-        envStore (unIdentifier binding) (ty, TermReal 42) -- TODO?
+        envStore (unIdentifier binding) (ty, fromExpr expr)
 
         liftIO . putDoc $
           "Has type:" <+> prettyType ty <> hardline

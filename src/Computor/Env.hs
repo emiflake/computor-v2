@@ -32,7 +32,7 @@ data Environment
   = Environment
   { getEnvironment :: Map Text (Type, Term)
   }
-  deriving (Show, Eq)
+  deriving (Show)
 
 lookup :: Text -> Environment -> Maybe (Type, Term)
 lookup key = Map.lookup key . getEnvironment

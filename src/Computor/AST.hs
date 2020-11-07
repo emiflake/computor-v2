@@ -16,7 +16,7 @@ module Computor.AST
   )
 where
 
-import Computor.AST.Identifier (Identifier, IdScope(..))
+import Computor.AST.Identifier (Identifier)
 import Computor.AST.Operator (Operator(..))
 import Computor.Type.Matrix
 
@@ -35,14 +35,14 @@ type SStatement = Tag.Spanned SStatement'
 data SStatement'
   -- Assignment to current scope
   -- e.g. <name:ident> = <expr>
-  = SAssignment (Identifier 'STerm) SExpr
+  = SAssignment Identifier SExpr
 
   -- Function definition sugar, desugars to lambda binding
   -- e.g. <name:ident>(<variables:ident>, ...) = <expr>
   -- desugars to <name:ident> = \<variables:ident> -> <expr>
   | SFunctionDefinition
-      (Identifier 'STerm)
-      (NonEmpty (Identifier 'STerm))
+      Identifier
+      (NonEmpty Identifier)
       SExpr
 
   -- Expression query
@@ -65,7 +65,7 @@ desugarStatement =
 type Statement = Tag.Spanned Statement'
 
 data Statement'
-  = Assignment (Identifier 'STerm) Expr
+  = Assignment Identifier Expr
   | ExprQuery Expr
   deriving (Eq, Show)
 
@@ -77,7 +77,7 @@ data SExpr'
   = SLitNum Double
 
   -- A literal identifier for terms, e.g. fooBar
-  | SLitIdent (Identifier 'STerm)
+  | SLitIdent Identifier
 
   -- A literal matrix, containing doubles, e.g. [[1,0];[0,1]]
   | SLitMatrix (Matrix SExpr)
@@ -92,7 +92,7 @@ data SExpr'
   | SNegate SExpr
 
   -- A lambda introduction, e.g. \_ -> _
-  | SLam (NonEmpty (Identifier 'STerm)) SExpr
+  | SLam (NonEmpty Identifier ) SExpr
 
   -- Application, e.g. _(_)
   | SApp SExpr (NonEmpty SExpr)
@@ -105,12 +105,12 @@ type Expr = Tag.Spanned Expr'
 
 data Expr'
   = LitNum Double
-  | LitIdent (Identifier 'STerm)
+  | LitIdent Identifier
   | LitMatrix (Matrix Expr)
   | LitImag
   | BinOp Operator Expr Expr
   | Negate Expr
-  | Lam (Identifier 'STerm) Expr
+  | Lam Identifier  Expr
   | App Expr Expr
   deriving (Eq, Show)
 
@@ -192,7 +192,7 @@ prettyExpr expr = case Tag.sValue expr of
     BinOp operator lhs rhs ->
       align $ hsep [ deepOperator lhs <> softline', pretty operator, deepOperator rhs ]
     Negate rhs ->
-      "-" <> pretty rhs
+      "-" <> prettyExpr rhs
     Lam binding body ->
       "\\" <> Pretty.identifier (pretty binding) <+> "->" <> softline <> nest 1 (prettyExpr body)
     App function value ->
